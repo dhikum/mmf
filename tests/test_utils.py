@@ -9,6 +9,7 @@ import socket
 import tempfile
 import unittest
 
+import pytorch_lightning as pl
 import torch
 from mmf.common.sample import Sample, SampleList
 
@@ -78,8 +79,6 @@ def compare_state_dicts(a, b):
 
 
 def build_random_sample_list():
-    from mmf.common.sample import Sample, SampleList
-
     first = Sample()
     first.x = random.randint(0, 100)
     first.y = torch.rand((5, 4))
@@ -132,10 +131,34 @@ class SimpleModelLogits(torch.nn.Module):
         self.criterion = torch.nn.MSELoss()
 
     def forward(self, prepared_batch):
+        input_sample = SampleList(prepared_batch)
         batch = prepared_batch[DATA_ITEM_KEY]
         output = self.linear(batch)
         loss = self.criterion(output, batch)
-        return {"losses": {"loss": loss}, "logits": output}
+        return {"losses": {"loss": loss}, "logits": output, "input_batch": input_sample}
+
+
+class SimpleLightningModel(pl.LightningModule):
+    def __init__(self, size, config=None):
+        super().__init__()
+        self.model = SimpleModelLogits(size)
+        self.config = config
+
+    def forward(self, prepared_batch):
+        return self.model(prepared_batch)
+
+    def training_step(self, batch, batch_idx, *args, **kwargs):
+        output = self(batch)
+        output["loss"] = output["losses"]["loss"]
+        return output
+
+    def configure_optimizers(self):
+        if self.config is None:
+            return torch.optim.Adam(self.parameters(), lr=0.01)
+        else:
+            from mmf.utils.build import build_optimizer
+
+            return build_optimizer(self, self.config)
 
 
 def assertModulesEqual(mod1, mod2):
