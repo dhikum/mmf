@@ -125,6 +125,19 @@ class SimpleModel(torch.nn.Module):
         return model_output
 
 
+class SimpleModelLogits(torch.nn.Module):
+    def __init__(self, size):
+        super().__init__()
+        self.linear = torch.nn.Linear(size, 1)
+        self.criterion = torch.nn.MSELoss()
+
+    def forward(self, prepared_batch):
+        batch = prepared_batch[DATA_ITEM_KEY]
+        output = self.linear(batch)
+        loss = self.criterion(output, batch)
+        return {"losses": {"loss": loss}, "logits": output}
+
+
 def assertModulesEqual(mod1, mod2):
     for p1, p2 in itertools.zip_longest(mod1.parameters(), mod2.parameters()):
         return p1.equal(p2)

@@ -84,3 +84,14 @@ class Report(OrderedDict):
                 continue
             if isinstance(self[key], torch.Tensor):
                 self[key] = torch.cat((self[key], report[key]), dim=0)
+
+    def accumulate_loss(self, report):
+        for key, value in report.losses.items():
+            if key not in self.losses.keys():
+                warnings.warn(
+                    f"{key} not found in report. Metrics calculation "
+                    + "might not work as expected."
+                )
+                continue
+            if isinstance(self.losses[key], torch.Tensor):
+                self.losses[key] += value

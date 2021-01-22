@@ -169,7 +169,6 @@ class BaseModel(nn.Module):
         sample_list = to_device(sample_list, model_device)
 
         model_output = super().__call__(sample_list, *args, **kwargs)
-
         # Don't do anything fancy to output if it is pretrained
         if self.is_pretrained:
             return model_output
