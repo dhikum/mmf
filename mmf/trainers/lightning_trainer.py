@@ -11,7 +11,10 @@ from mmf.modules.metrics import Metrics
 from mmf.trainers.base_trainer import BaseTrainer
 from mmf.trainers.lightning_core.loop_callback import LightningLoopCallback
 from mmf.utils.build import build_model
-from mmf.utils.general import get_max_updates, print_model_parameters
+from mmf.utils.configuration import get_mmf_env
+from mmf.utils.flow import get_max_updates
+from mmf.utils.general import print_model_parameters
+from mmf.utils.logger import TensorboardLogger, setup_output_folder
 from pytorch_lightning import Trainer
 
 
@@ -28,11 +31,11 @@ class LightningTrainer(BaseTrainer):
         super().load()
         self._calculate_max_updates()
         self._calculate_gradient_clip_val()
-        self._load_trainer()
+        loggers = self._load_loggers()
+        self._load_trainer(loggers=loggers)
 
-    def _load_trainer(self):
+    def _load_trainer(self, loggers=False):
         self.trainer = Trainer(
-            logger=False,
             gpus=self._gpus,
             num_nodes=self._num_nodes,
             callbacks=self._callbacks,
@@ -48,7 +51,23 @@ class LightningTrainer(BaseTrainer):
             accumulate_grad_batches=self.training_config.update_frequency,
             val_check_interval=self.training_config.evaluation_interval,
             log_every_n_steps=self.training_config.log_interval,
+            flush_logs_every_n_steps=self.training_config.log_interval,
+            logger=loggers,
+            default_root_dir=get_mmf_env(key="log_dir"),
         )
+
+    def _load_loggers(self):
+        if self.training_config.tensorboard:
+            log_dir = setup_output_folder(folder_only=True)
+            env_tb_logdir = get_mmf_env(key="tensorboard_logdir")
+            if env_tb_logdir:
+                log_dir = env_tb_logdir
+
+            self.tb_writer = TensorboardLogger(log_dir)
+        else:
+            self.tb_writer = None
+        # TODO: @sash PL logger upgrade
+        return False
 
     def configure_device(self):
         # TODO: @sash coming soon!
@@ -121,6 +140,11 @@ class LightningTrainer(BaseTrainer):
         print_model_parameters(self.model)
 
         logger.info("Starting training...")
+
+        if "train" not in self.run_type:
+            self.inference()
+            return
+
         self.trainer.fit(self.model, self.data_module)
 
     def inference(self):
